@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   AreaChart,
   Area,
@@ -11,74 +11,37 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ComposedChart,
 } from "recharts";
 import {
   Users,
   TrendingUp,
   Layers,
   BarChart3,
-  Info,
-  ChevronDown,
   Scale,
+  AlertTriangle,
+  Database,
+  Search,
+  Smartphone,
+  ArrowUpRight,
+  Loader,
 } from "lucide-react";
-import "./app.css";
+import "./App.css";
 
-const kpi = {
-  workers: { value: "90k", range: "Range: 75k → 105k" },
-  growth: { value: "+18%", sub: "0.8% • Last update: 2026-03-05" },
-  coverage: {
-    platformsTracked: 4,
-    platforms: ["Jahez", "HungerStation", "Mrsool", "Chefz"],
-    lastUpdate: "2026-03-05",
-  },
-  gap: { value: "+55k", label: "Estimated — Official" },
-};
+const API_BASE = "/api";
 
-// Time series (Estimated Gig Workforce)
-const workforceSeries = [
-  { q: "Q2 2025", base: 56, low: 50, high: 62 },
-  { q: "Q3 2025", base: 58, low: 52, high: 65 },
-  { q: "Q4 2025", base: 60, low: 54, high: 68 },
-  { q: "Q1 2026", base: 63, low: 57, high: 72 },
-  { q: "Q2 2026", base: 67, low: 61, high: 77 },
-  { q: "Q3 2026", base: 70, low: 64, high: 80 },
-  { q: "Q4 2026", base: 74, low: 68, high: 84 },
-  { q: "Q1 2027", base: 78, low: 71, high: 87 },
-  { q: "Q2 2027", base: 85, low: 77, high: 90 },
-];
-
-// Triangulated (bars)
-const triangulated = [
-  { name: "Financial\nProxy", value: 95 },
-  { name: "App Ecosystem\nEstimate", value: 80 },
-  { name: "Recruitment\nSignal", value: 85 },
-  { name: "Final\nEstimate", value: 90 },
-];
-
-// App Store Activity (mini line)
-const appStore = [
-  { m: "Mar 2025", v: 3.0 },
-  { m: "May 2025", v: 3.4 },
-  { m: "Aug 2025", v: 4.1 },
-  { m: "Jan 2026", v: 5.0 },
-  { m: "Feb 2026", v: 6.4 },
-];
-
-// Search interest (horizontal bars)
-const searchInterest = [
-  { platform: "Jahez", score: 67 },
-  { platform: "HungerStation", score: 54 },
-  { platform: "Mrsool", score: 38 },
-  { platform: "Chefz", score: 22 },
-];
-
-// Platform comparison (workers)
-const platformComparison = [
-  { platform: "Jahez", min: 22, max: 95 },
-  { platform: "HungerStation", min: 23, max: 35 },
-  { platform: "Mrsool", min: 15, max: 25 },
-  { platform: "Chefz", min: 10, max: 16 },
-];
+function useApi(endpoint) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch(`${API_BASE}${endpoint}`)
+      .then((r) => r.json())
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [endpoint]);
+  return { data, loading };
+}
 
 function SoftTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
@@ -87,9 +50,11 @@ function SoftTooltip({ active, payload, label }) {
       <div className="tooltipTitle">{label}</div>
       {payload.map((p) => (
         <div key={p.dataKey} className="tooltipRow">
-          <span className="dot" />
+          <span className="dot" style={p.color ? { background: p.color } : {}} />
           <span className="tooltipKey">{p.name ?? p.dataKey}</span>
-          <span className="tooltipVal">{p.value}</span>
+          <span className="tooltipVal">
+            {typeof p.value === "number" ? p.value.toLocaleString() : p.value}
+          </span>
         </div>
       ))}
     </div>
@@ -115,6 +80,15 @@ function Card({ title, icon, right, children, className }) {
   );
 }
 
+function LoadingState() {
+  return (
+    <div className="loadingWrap">
+      <Loader size={20} className="spinner" />
+      <span className="muted">Loading data...</span>
+    </div>
+  );
+}
+
 function Header() {
   return (
     <div className="header">
@@ -123,50 +97,64 @@ function Header() {
           <Users size={18} />
         </div>
         <div className="brandText">
-          <div className="brandTitle">Gig Economy</div>
-          <div className="brandSub">Data Observatory</div>
+          <div className="brandTitle">Gig Economy Observatory</div>
+          <div className="brandSub">Platform-Based Employment Intelligence</div>
         </div>
       </div>
-
       <div className="headerControls">
-        <button className="ghostBtn" type="button">
-          <span className="ghostLeft">
-            <Info size={16} />
-          </span>
-          <span>02 hours</span>
-          <ChevronDown size={16} />
-        </button>
-        <button className="ghostBtn" type="button">
-          <span>7 days</span>
-          <span className="arabic">لبياناتنا</span>
-          <ChevronDown size={16} />
-        </button>
+        <div className="methodBadge">
+          <Database size={14} />
+          <span>Tadawul-Anchored</span>
+        </div>
+        <div className="methodBadge">
+          <Scale size={14} />
+          <span>Multi-Source Triangulation</span>
+        </div>
       </div>
     </div>
   );
 }
 
-function KpiRow() {
+function KpiRow({ data }) {
+  if (!data) return <LoadingState />;
+
+  const platforms = data.platforms || {};
+  const platformNames = Object.values(platforms).map((p) => p.name);
+
   return (
     <div className="kpiGrid">
-      <Card
-        title="Estimated Gig Workers"
-        icon={<Users size={18} />}
-        right={<span className="muted"> </span>}
-      >
+      <Card title="Estimated Gig Workers" icon={<Users size={18} />}>
         <div className="kpiMain">
-          <div className="kpiValue">{kpi.workers.value}</div>
+          <div className="kpiValue">
+            {(data.unique_workers_estimate / 1000).toFixed(0)}k
+          </div>
           <div className="kpiSub">
-            <Pill muted>{kpi.workers.range}</Pill>
+            <Pill muted>
+              Range: {(data.confidence_low / 1000).toFixed(0)}k →{" "}
+              {(data.confidence_high / 1000).toFixed(0)}k
+            </Pill>
           </div>
         </div>
       </Card>
 
-      <Card title="Growth Rate" icon={<TrendingUp size={18} />}>
+      <Card title="Blind Spot Gap" icon={<AlertTriangle size={18} />}>
         <div className="kpiMain">
-          <div className="kpiValue kpiPositive">{kpi.growth.value}</div>
+          <div className="kpiValue kpiWarn">
+            +{(data.gap / 1000).toFixed(0)}k
+          </div>
           <div className="kpiSub">
-            <Pill muted>{kpi.growth.sub}</Pill>
+            <Pill muted>{data.gap_pct}% unregistered in GOSI</Pill>
+          </div>
+          <div className="gapBar">
+            <div
+              className="gapBarOfficial"
+              style={{ width: `${(data.official_gosi / data.unique_workers_estimate) * 100}%` }}
+            >
+              <span>GOSI</span>
+            </div>
+            <div className="gapBarGap">
+              <span>Gap</span>
+            </div>
           </div>
         </div>
       </Card>
@@ -175,197 +163,248 @@ function KpiRow() {
         <div className="coverage">
           <div className="coverageRow">
             <div className="coverageKey">Platforms Tracked:</div>
-            <div className="coverageVal">{kpi.coverage.platformsTracked}</div>
+            <div className="coverageVal">{platformNames.length}</div>
           </div>
-
           <div className="coverageList">
-            {kpi.coverage.platforms.map((p) => (
-              <span className="chip" key={p}>
-                {p}
-              </span>
+            {platformNames.map((p) => (
+              <span className="chip" key={p}>{p}</span>
             ))}
           </div>
-
           <div className="coverageMeta">
-            <span className="muted">Last update:</span>{" "}
-            <span>{kpi.coverage.lastUpdate}</span>
+            <span className="muted">Quarter:</span>{" "}
+            <span>{data.quarter?.replace("_", " ")}</span>
           </div>
         </div>
       </Card>
 
-      <Card title="Estimated Gap" icon={<BarChart3 size={18} />}>
+      <Card title="Official vs Estimated" icon={<BarChart3 size={18} />}>
         <div className="gap">
-          <div className="gapTop">
-            <div className="kpiValue kpiPositive">{kpi.gap.value}</div>
-            <div className="gapBadges">
-              <span className="badgeGold">{kpi.gap.value}</span>
-              <span className="badgeGold">{kpi.gap.value}</span>
-              <span className="badgeGold">{kpi.gap.value}</span>
+          <div className="gapCompare">
+            <div className="gapCompareItem">
+              <div className="gapCompareLabel muted">GOSI Registered</div>
+              <div className="gapCompareValue">{(data.official_gosi / 1000).toFixed(1)}k</div>
+            </div>
+            <div className="gapCompareDivider">vs</div>
+            <div className="gapCompareItem">
+              <div className="gapCompareLabel muted">Our Estimate</div>
+              <div className="gapCompareValue kpiPositive">
+                {(data.unique_workers_estimate / 1000).toFixed(1)}k
+              </div>
             </div>
           </div>
-          <div className="muted">{kpi.gap.label}</div>
+          <div className="muted" style={{ marginTop: 6, fontWeight: 700 }}>
+            Overlap correction: {(data.overlap_rate * 100).toFixed(0)}% multi-platform
+          </div>
         </div>
       </Card>
     </div>
   );
 }
 
-function WorkforceChart() {
+function WorkforceChart({ data }) {
+  if (!data)
+    return (
+      <Card title="Estimated vs Official Workforce" className="bigCard">
+        <LoadingState />
+      </Card>
+    );
+
+  const historical = (data.historical || []).map((d) => ({
+    q: d.quarter.replace("_", " "),
+    estimated: d.estimated,
+    official: d.official,
+    gap: d.gap,
+    low: d.confidence_low,
+    high: d.confidence_high,
+  }));
+
+  const forecast = (data.forecast || []).map((d) => ({
+    q: d.quarter.replace("_", " "),
+    forecast: d.forecast,
+    forecastLow: d.confidence_low,
+    forecastHigh: d.confidence_high,
+  }));
+
+  const gosiForecast = (data.gosi_forecast || []).map((d) => ({
+    q: d.quarter.replace("_", " "),
+    gosiForecast: d.forecast,
+  }));
+
+  const merged = [...historical];
+  if (historical.length && forecast.length) {
+    const last = historical[historical.length - 1];
+    forecast[0] = { ...forecast[0], estimated: last.estimated, official: last.official };
+  }
+  forecast.forEach((f, i) => {
+    merged.push({ ...f, ...(gosiForecast[i] || {}) });
+  });
+
   return (
     <Card
       title={
         <span>
-          Estimated Gig Workforce <span className="muted">(Unique Workers)</span>
+          Estimated vs Official Workforce <span className="muted">(Quarterly)</span>
         </span>
       }
       right={
         <span className="legendHint">
           <span className="legendDot" /> Estimate
+          <span className="legendDot legendDotMuted" /> GOSI
         </span>
       }
       className="bigCard"
     >
       <div className="chartWrap">
         <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={workforceSeries} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <ComposedChart data={merged} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <defs>
-              <linearGradient id="hiFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="10%" stopOpacity={0.22} />
-                <stop offset="95%" stopOpacity={0.02} />
+              <linearGradient id="estFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="10%" stopColor="rgba(47,109,85,0.3)" stopOpacity={1} />
+                <stop offset="95%" stopColor="rgba(47,109,85,0.02)" stopOpacity={1} />
               </linearGradient>
-              <linearGradient id="midFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="10%" stopOpacity={0.18} />
-                <stop offset="95%" stopOpacity={0.02} />
+              <linearGradient id="fcFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="10%" stopColor="rgba(196,156,84,0.25)" stopOpacity={1} />
+                <stop offset="95%" stopColor="rgba(196,156,84,0.02)" stopOpacity={1} />
               </linearGradient>
             </defs>
-
             <CartesianGrid strokeDasharray="4 10" opacity={0.35} />
             <XAxis dataKey="q" tickMargin={10} />
-            <YAxis tickMargin={10} domain={[45, 95]} />
+            <YAxis tickMargin={10} />
             <Tooltip content={<SoftTooltip />} />
-
-            {/* High band */}
-            <Area
-              type="monotone"
-              dataKey="high"
-              name="High Estimate"
-              strokeOpacity={0}
-              fill="url(#hiFill)"
-            />
-            {/* Low band */}
-            <Area
-              type="monotone"
-              dataKey="low"
-              name="Low Estimate"
-              strokeOpacity={0}
-              fillOpacity={0}
-              fill="transparent"
-            />
-
-            {/* Base estimate line */}
-            <Line
-              type="monotone"
-              dataKey="base"
-              name="Base Estimate"
-              strokeWidth={3}
-              dot={false}
-            />
-          </AreaChart>
+            <Area type="monotone" dataKey="high" name="High" strokeOpacity={0} fill="url(#estFill)" />
+            <Area type="monotone" dataKey="low" name="Low" strokeOpacity={0} fillOpacity={0} />
+            <Area type="monotone" dataKey="forecastHigh" name="Forecast High" strokeOpacity={0} fill="url(#fcFill)" />
+            <Area type="monotone" dataKey="forecastLow" name="Forecast Low" strokeOpacity={0} fillOpacity={0} />
+            <Line type="monotone" dataKey="estimated" name="Our Estimate" stroke="rgba(47,109,85,0.9)" strokeWidth={3} dot={false} />
+            <Line type="monotone" dataKey="official" name="GOSI Official" stroke="rgba(47,109,85,0.35)" strokeWidth={2} strokeDasharray="6 4" dot={false} />
+            <Line type="monotone" dataKey="forecast" name="Forecast" stroke="rgba(196,156,84,0.85)" strokeWidth={3} strokeDasharray="8 4" dot={false} />
+            <Line type="monotone" dataKey="gosiForecast" name="GOSI Projected" stroke="rgba(196,156,84,0.4)" strokeWidth={2} strokeDasharray="4 4" dot={false} />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
-
       <div className="chartLegendRow">
-        <div className="legendItem">
-          <span className="legendSwatch swatchLine" /> Base Estimate
-        </div>
-        <div className="legendItem">
-          <span className="legendSwatch swatchBand" /> High Estimate
-        </div>
-        <div className="legendItem">
-          <span className="legendSwatch swatchDash" /> Low Estimate
-        </div>
+        <div className="legendItem"><span className="legendSwatch swatchLine" /> Our Estimate</div>
+        <div className="legendItem"><span className="legendSwatch swatchDash" /> GOSI Official</div>
+        <div className="legendItem"><span className="legendSwatch swatchForecast" /> Forecast</div>
+        <div className="legendItem"><span className="legendSwatch swatchBand" /> Confidence</div>
       </div>
     </Card>
   );
 }
 
-function TriangulatedChart() {
+function TriangulationChart({ data }) {
+  if (!data)
+    return (
+      <Card title="Triangulated Estimation" className="bigCard">
+        <LoadingState />
+      </Card>
+    );
+
+  const methods = (data.methods || []).map((m) => ({
+    name: m.name,
+    estimate: m.estimate_jahez,
+    confidence: m.confidence,
+    weight: m.weight * 100,
+    description: m.description,
+    source: m.source,
+  }));
+
   return (
     <Card
-      title="Triangulated Workforce Estimate"
-      right={
-        <span className="muted">
-          <Scale size={16} style={{ verticalAlign: "middle" }} />{" "}
-        </span>
-      }
+      title="Triangulated Estimation"
+      right={<span className="muted"><Scale size={16} style={{ verticalAlign: "middle" }} /> Jahez anchor</span>}
       className="bigCard"
     >
-      <div className="chartWrap">
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={triangulated} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-            <CartesianGrid strokeDasharray="4 10" opacity={0.35} />
-            <XAxis dataKey="name" tickMargin={12} />
-            <YAxis domain={[70, 100]} />
-            <Tooltip content={<SoftTooltip />} />
-            <Bar dataKey="value" radius={[14, 14, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="triangulationGrid">
+        {methods.map((m) => (
+          <div className="triMethod" key={m.name}>
+            <div className="triHeader">
+              <span className="triName">{m.name}</span>
+              <span className={`triBadge triBadge-${m.confidence}`}>{m.confidence}</span>
+            </div>
+            <div className="triValue">{m.estimate.toLocaleString()}</div>
+            <div className="triSource muted">{m.source}</div>
+            <div className="triWeight">
+              <div className="triWeightBar">
+                <div className="triWeightFill" style={{ width: `${m.weight}%` }} />
+              </div>
+              <span className="muted">Weight: {m.weight}%</span>
+            </div>
+          </div>
+        ))}
       </div>
-
       <div className="formula">
-        <span className="muted">FinalEstimate</span> = (Estimate1 + Estimate2 +
-        Estimate3) / 3
+        <span className="muted">Method: </span>{data.formula}
+      </div>
+      <div className="triResult">
+        <span className="muted">Triangulated Total (all platforms):</span>
+        <span className="triResultValue">{data.triangulated_estimate?.toLocaleString()} workers</span>
       </div>
     </Card>
   );
 }
 
-function AppStoreCard() {
+function PlatformBreakdown({ data }) {
+  if (!data) return <Card title="Platform Breakdown"><LoadingState /></Card>;
+
+  const platforms = data.platforms || {};
+  const entries = Object.entries(platforms);
+  const maxWorkers = Math.max(...entries.map(([, p]) => p.confidence_high || p.estimated_workers));
+
   return (
     <Card
-      title={
-        <span>
-          App Store Activity <span className="muted">(Jahez)</span>
-        </span>
-      }
-      right={<span className="kpiTinyUp">+17.6% ↑</span>}
+      title={<span>Platform Breakdown <span className="muted">(Workers)</span></span>}
+      right={<span className="muted">Q: {data.quarter?.replace("_", " ")}</span>}
     >
-      <div className="miniMeta muted">Reviews per month</div>
-      <div className="miniChart">
-        <ResponsiveContainer width="100%" height={140}>
-          <LineChart data={appStore} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="4 10" opacity={0.25} />
-            <XAxis dataKey="m" hide />
-            <YAxis hide domain={[2.5, 7]} />
-            <Tooltip content={<SoftTooltip />} />
-            <Line type="monotone" dataKey="v" strokeWidth={3} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
+      <div className="rangeList">
+        {entries.map(([key, p]) => {
+          const low = p.confidence_low;
+          const high = p.confidence_high;
+          const left = (low / maxWorkers) * 100;
+          const width = ((high - low) / maxWorkers) * 100;
+          return (
+            <div className="rangeRow" key={key}>
+              <div className="rangeLabel">{p.name}</div>
+              <div className="rangeTrack">
+                <div className="rangeFill" style={{ marginLeft: `${left}%`, width: `${width}%` }} />
+              </div>
+              <div className="rangeVal muted">{(low / 1000).toFixed(1)}–{(high / 1000).toFixed(1)}k</div>
+            </div>
+          );
+        })}
       </div>
-
-      <div className="storeBadges">
-        <span className="chip soft">Google Play</span>
-        <span className="chip soft">App Store</span>
-        <span className="chip soft">Chefz</span>
+      <div className="muted miniFoot">
+        Overlap correction: {(data.overlap_rate * 100).toFixed(0)}% multi-platform ·
+        Total unique: {(data.total_unique / 1000).toFixed(1)}k
       </div>
     </Card>
   );
 }
 
-function SearchInterestCard() {
+function TrendsCard({ data }) {
+  if (!data) return <Card title="Search Interest"><LoadingState /></Card>;
+
+  const consumer = data.consumer_demand?.data || [];
+  const terms = data.consumer_demand?.terms || [];
+
+  // Average the last 4 weeks for a stable snapshot
+  const recentWeeks = consumer.slice(-4);
+  const bars = terms
+    .map((term) => {
+      const avg = recentWeeks.reduce((sum, d) => sum + (d[term] || 0), 0) / (recentWeeks.length || 1);
+      return { platform: term, score: Math.round(avg) };
+    })
+    .sort((a, b) => b.score - a.score);
+
   return (
     <Card
-      title={
-        <span>
-          Search Interest <span className="muted">(Google Trends)</span>
-        </span>
-      }
-      right={<span className="kpiTinyUp">+24% ↑</span>}
+      title={<span>Search Interest <span className="muted">(Google Trends)</span></span>}
+      right={<span className="kpiTinyUp"><TrendingUp size={14} /> Consumer</span>}
     >
       <div className="hbarList">
-        {searchInterest.map((r) => (
+        {bars.map((r) => (
           <div className="hbarRow" key={r.platform}>
-            <div className="hbarLabel">{r.platform}</div>
+            <div className="hbarLabel" style={{ fontSize: 12 }}>{r.platform}</div>
             <div className="hbarTrack">
               <div className="hbarFill" style={{ width: `${r.score}%` }} />
             </div>
@@ -373,63 +412,124 @@ function SearchInterestCard() {
           </div>
         ))}
       </div>
-      <div className="muted miniFoot">Mar 2025 → Feb 2026</div>
+      <div className="muted miniFoot">Latest month snapshot · Saudi Arabia</div>
     </Card>
   );
 }
 
-function PlatformComparisonCard() {
+function DriverSupplyCard({ data }) {
+  if (!data) return <Card title="Driver Registration Intent"><LoadingState /></Card>;
+
+  const driverData = data.driver_supply?.data || [];
+  const terms = data.driver_supply?.terms || [];
+
+  // Aggregate weekly data into monthly averages to avoid duplicate x-axis keys
+  const monthly = {};
+  driverData.forEach((d) => {
+    const month = d.date?.slice(0, 7);
+    if (!month) return;
+    if (!monthly[month]) monthly[month] = { count: 0 };
+    monthly[month].count++;
+    terms.forEach((t) => {
+      monthly[month][t] = (monthly[month][t] || 0) + (d[t] || 0);
+    });
+  });
+  const chartData = Object.entries(monthly).map(([month, vals]) => {
+    const point = { date: month };
+    terms.forEach((t) => { point[t] = Math.round((vals[t] || 0) / vals.count); });
+    return point;
+  });
+
+  const colors = [
+    "rgba(47,109,85,0.9)",
+    "rgba(196,156,84,0.85)",
+    "rgba(80,60,140,0.75)",
+    "rgba(180,80,80,0.75)",
+  ];
+
   return (
     <Card
-      title={
-        <span>
-          Platform Comparison <span className="muted">(Workers)</span>
-        </span>
-      }
-      right={<span className="kpiTinyUp">+20.9% ↑</span>}
+      title={<span>Driver Registration Intent <span className="muted">(Supply)</span></span>}
+      right={<span className="kpiTinyUp"><ArrowUpRight size={14} /> Supply</span>}
     >
-      <div className="rangeList">
-        {platformComparison.map((p) => {
-          const span = Math.max(1, p.max - p.min);
-          const left = (p.min / 100) * 100;
-          const width = (span / 100) * 100;
-          return (
-            <div className="rangeRow" key={p.platform}>
-              <div className="rangeLabel">{p.platform}</div>
-              <div className="rangeTrack">
-                <div
-                  className="rangeFill"
-                  style={{ marginLeft: `${left}%`, width: `${width}%` }}
-                />
-              </div>
-              <div className="rangeVal muted">
-                {p.min}–{p.max}k
-              </div>
-            </div>
-          );
-        })}
+      <div className="miniChart">
+        <ResponsiveContainer width="100%" height={160}>
+          <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="4 10" opacity={0.25} />
+            <XAxis dataKey="date" hide />
+            <YAxis hide />
+            <Tooltip content={<SoftTooltip />} />
+            {terms.map((t, i) => (
+              <Line key={t} type="monotone" dataKey={t} name={t} stroke={colors[i % colors.length]} strokeWidth={2} dot={false} />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
       </div>
-      <div className="muted miniFoot">Mar 2025 → Feb 2026</div>
+      <div className="muted miniFoot">"Register as driver" search volume · 12 months</div>
+    </Card>
+  );
+}
+
+function MethodologyCard({ data }) {
+  if (!data) return null;
+  const m = data.methodology || {};
+  return (
+    <Card title="Methodology" icon={<Database size={18} />} className="methodCard">
+      <div className="methodGrid">
+        <div className="methodItem">
+          <div className="methodItemIcon"><Database size={16} /></div>
+          <div>
+            <div className="methodItemTitle">Anchor</div>
+            <div className="methodItemDesc">{m.anchor}</div>
+          </div>
+        </div>
+        <div className="methodItem">
+          <div className="methodItemIcon"><Smartphone size={16} /></div>
+          <div>
+            <div className="methodItemTitle">Scaling</div>
+            <div className="methodItemDesc">{m.scaling}</div>
+          </div>
+        </div>
+        <div className="methodItem">
+          <div className="methodItemIcon"><Users size={16} /></div>
+          <div>
+            <div className="methodItemTitle">Overlap</div>
+            <div className="methodItemDesc">{m.overlap}</div>
+          </div>
+        </div>
+        <div className="methodItem">
+          <div className="methodItemIcon"><Search size={16} /></div>
+          <div>
+            <div className="methodItemTitle">Validation</div>
+            <div className="methodItemDesc">{m.validation}</div>
+          </div>
+        </div>
+      </div>
     </Card>
   );
 }
 
 export default function App() {
+  const { data: summary } = useApi("/summary");
+  const { data: timeseries } = useApi("/timeseries");
+  const { data: triangulation } = useApi("/triangulation");
+  const { data: platforms } = useApi("/platforms");
+  const { data: trends } = useApi("/trends");
+
   return (
     <div className="page">
       <Header />
-      <KpiRow />
-
+      <KpiRow data={summary} />
       <div className="grid2">
-        <WorkforceChart />
-        <TriangulatedChart />
+        <WorkforceChart data={timeseries} />
+        <TriangulationChart data={triangulation} />
       </div>
-
       <div className="grid3">
-        <AppStoreCard />
-        <SearchInterestCard />
-        <PlatformComparisonCard />
+        <PlatformBreakdown data={platforms} />
+        <TrendsCard data={trends} />
+        <DriverSupplyCard data={trends} />
       </div>
+      <MethodologyCard data={summary} />
     </div>
   );
 }
