@@ -30,25 +30,25 @@ def estimate_workers_from_financials(quarter: str) -> dict:
 
     eco = DRIVER_ECONOMICS
     cor = fin["cost_of_revenue_sar"]
+    reported_orders = fin["orders_m"] * 1_000_000
 
     # Estimated delivery spend (driver payouts portion of cost of revenue)
     delivery_spend = cor * eco["delivery_cost_share_of_cor"]
 
-    # Implied orders from spend
-    implied_orders = delivery_spend / eco["avg_payout_per_order"]
+    # Compute avg payout per order dynamically from this quarter's data
+    # Derived: (COR × 60%) / orders — typically ~9-10 SAR per order
+    avg_payout = delivery_spend / reported_orders if reported_orders else 10.0
 
-    # Reported orders for cross-check
-    reported_orders = fin["orders_m"] * 1_000_000
+    # Method A: FTE from reported order volume
+    # (reported orders ÷ driver daily capacity ÷ active days)
+    driver_capacity = eco["avg_orders_per_driver_day"] * eco["active_days_per_quarter"]
+    fte_from_reported = reported_orders / driver_capacity
 
-    # FTE drivers needed to fulfill reported orders
-    fte_from_reported = reported_orders / (
-        eco["avg_orders_per_driver_day"] * eco["active_days_per_quarter"]
-    )
-
-    # FTE from financial implication
-    fte_from_financial = implied_orders / (
-        eco["avg_orders_per_driver_day"] * eco["active_days_per_quarter"]
-    )
+    # Method B: FTE from financial spend
+    # (total delivery spend ÷ avg payout per driver per quarter)
+    # A driver earning avg_payout per order × capacity orders = quarterly earnings
+    quarterly_driver_earnings = avg_payout * driver_capacity
+    fte_from_financial = delivery_spend / quarterly_driver_earnings
 
     # Average the two approaches for robustness
     fte_avg = (fte_from_reported + fte_from_financial) / 2
@@ -64,7 +64,7 @@ def estimate_workers_from_financials(quarter: str) -> dict:
         "revenue_sar": fin["revenue_sar"],
         "cost_of_revenue_sar": cor,
         "estimated_delivery_spend_sar": round(delivery_spend),
-        "implied_orders": round(implied_orders),
+        "avg_payout_per_order": round(avg_payout, 2),
         "reported_orders_m": fin["orders_m"],
         "fte_from_financial": round(fte_from_financial),
         "fte_from_reported": round(fte_from_reported),

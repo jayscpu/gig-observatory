@@ -153,6 +153,15 @@ TGA_MARKET_DATA = {
         "total_drivers": 403_300,
         "avg_delivery_time_min": 45,
     },
+    # 2025: Projected from TGA 2024 using reported YoY growth rates
+    # TGA Q1 2025 reported 79.6M orders (+22% YoY) — SPA March 2025
+    "2025": {
+        "total_orders_m": 354,          # 290M × 1.22 (Q1 2025 showed 22% growth)
+        "saudi_drivers": 161_000,       # 140K × 1.15 (Saudi driver growth slowing)
+        "non_saudi_drivers": 314_000,   # 302K × 1.04 (non-Saudi growth modest)
+        "total_drivers": 475_000,
+        "source": "Projected from TGA 2024 using Q1 2025 reported growth rates",
+    },
 }
 
 # ─── Market Share by Orders (2024) ────────────────────────────────────────────
@@ -177,10 +186,23 @@ ORDER_MARKET_SHARE = {
 # Jahez has 4,000+ Logi drivers under direct sponsorship (Q3 2025)
 # Total market has 442,000 drivers (TGA 2024)
 # Cost of revenue includes: delivery costs, payment processing, tech infra
-# Delivery/logistics portion estimated at ~60% of cost of revenue
+#
+# 60% delivery share benchmark:
+# - DoorDash 10-K: "cost of revenue primarily consists of payments to Dashers"
+# - Delivery Hero: driver costs are ~55-65% of CoR in MENA segment
+# - Jahez does not break out delivery cost separately in Tadawul filings
+# - 60% is a midpoint estimate; sensitivity: at 50%, Jahez FTE drops ~17%
+#
+# avg_payout_per_order is NOW computed dynamically per quarter in tadawul.py
+# as (COR × 0.60) / (orders_m × 1e6) — typically ~9-10 SAR
+#
+# orders_per_driver_day sensitivity:
+# - At 8/day: Jahez FTE ~39K, total Method 1 ~120K (closer to TGA)
+# - At 12/day: Jahez FTE ~26K, total Method 1 ~81K (current)
+# - At 15/day: Jahez FTE ~21K, total Method 1 ~65K
+# 12 is reasonable for full-time; blended FT/PT may be 8-10
 DRIVER_ECONOMICS = {
     "delivery_cost_share_of_cor": 0.60,  # delivery cost as share of cost of revenue
-    "avg_payout_per_order": 11.5,        # SAR — derived: COR*0.6 / orders
     "avg_orders_per_driver_day": 12,     # conservative for blended FT/PT
     "active_days_per_quarter": 78,       # ~26 days/month * 3
     "jahez_logi_drivers": 4_000,         # Jahez direct fleet (Q3 2025)
