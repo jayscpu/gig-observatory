@@ -25,6 +25,8 @@ import {
   Smartphone,
   ArrowUpRight,
   Loader,
+  Brain,
+  Activity,
 } from "lucide-react";
 import "./App.css";
 
@@ -509,12 +511,158 @@ function MethodologyCard({ data }) {
   );
 }
 
+function MLExplainCard({ data }) {
+  if (!data)
+    return (
+      <Card title="ML Model: Proxy Signal Analysis" className="bigCard">
+        <LoadingState />
+      </Card>
+    );
+  if (data.error)
+    return (
+      <Card title="ML Model" className="bigCard">
+        <div className="muted">{data.error}</div>
+      </Card>
+    );
+
+  const perf = data.performance || {};
+  const features = data.feature_importance || [];
+  const explanation = data.latest_quarter_explanation || {};
+  const breakdown = explanation.shap_breakdown || [];
+  const predsActual = data.predictions_vs_actual || [];
+
+  return (
+    <Card
+      title={
+        <span>
+          ML Model: Proxy Signal Analysis{" "}
+          <span className="muted">(XGBoost + SHAP)</span>
+        </span>
+      }
+      icon={<Brain size={18} />}
+      right={
+        <span className="mlPerfBadge">
+          <Activity size={14} />
+          R² {perf.r2_score} · MAPE {perf.mape_pct}%
+        </span>
+      }
+      className="bigCard"
+    >
+      <div className="mlGrid">
+        {/* Feature Importance */}
+        <div className="mlSection">
+          <div className="mlSectionTitle">Feature Importance (SHAP)</div>
+          <div className="mlBarList">
+            {features.map((f) => (
+              <div className="mlBarRow" key={f.feature}>
+                <div className="mlBarLabel">{f.label}</div>
+                <div className="mlBarTrack">
+                  <div
+                    className="mlBarFill"
+                    style={{ width: `${Math.min(f.importance_pct, 100)}%` }}
+                  />
+                </div>
+                <div className="mlBarVal">{f.importance_pct}%</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Latest Quarter Explanation */}
+        <div className="mlSection">
+          <div className="mlSectionTitle">
+            Latest Quarter Breakdown ({explanation.quarter?.replace("_", " ")})
+          </div>
+          <div className="shapWaterfall">
+            <div className="shapBase">
+              <span className="muted">Base value</span>
+              <span className="shapBaseVal">
+                {explanation.base_value?.toLocaleString()}
+              </span>
+            </div>
+            {breakdown.map((b) => (
+              <div
+                className={`shapRow shapRow-${b.direction}`}
+                key={b.feature}
+              >
+                <div className="shapLabel">{b.label}</div>
+                <div className="shapArrow">
+                  {b.direction === "positive" ? "+" : ""}
+                  {b.shap_value?.toLocaleString()}
+                </div>
+                <div className="shapFeatureVal muted">{b.feature_value}</div>
+              </div>
+            ))}
+            <div className="shapResult">
+              <span className="muted">Predicted</span>
+              <span className="shapResultVal">
+                {explanation.predicted?.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Predictions vs Actual mini chart */}
+      <div className="mlAccuracy">
+        <div className="mlSectionTitle">Model Accuracy (LOO Cross-Validation)</div>
+        <div className="miniChart">
+          <ResponsiveContainer width="100%" height={180}>
+            <ComposedChart
+              data={predsActual.map((d) => ({
+                q: d.quarter.replace("_", " "),
+                actual: d.actual,
+                predicted: d.loo_predicted,
+              }))}
+              margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="4 10" opacity={0.25} />
+              <XAxis dataKey="q" tickMargin={8} fontSize={11} />
+              <YAxis tickMargin={8} fontSize={11} />
+              <Tooltip content={<SoftTooltip />} />
+              <Bar
+                dataKey="actual"
+                name="Actual"
+                fill="rgba(47,109,85,0.25)"
+                radius={[4, 4, 0, 0]}
+              />
+              <Line
+                type="monotone"
+                dataKey="predicted"
+                name="LOO Predicted"
+                stroke="rgba(196,156,84,0.9)"
+                strokeWidth={2.5}
+                dot={{ fill: "rgba(196,156,84,0.9)", r: 3 }}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mlPerfRow">
+          <div className="mlPerfItem">
+            <span className="muted">Validation</span>
+            <span>{perf.validation}</span>
+          </div>
+          <div className="mlPerfItem">
+            <span className="muted">MAE</span>
+            <span>±{perf.mae?.toLocaleString()} workers</span>
+          </div>
+          <div className="mlPerfItem">
+            <span className="muted">Samples</span>
+            <span>{data.n_samples} quarters</span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export default function App() {
   const { data: summary } = useApi("/summary");
   const { data: timeseries } = useApi("/timeseries");
   const { data: triangulation } = useApi("/triangulation");
   const { data: platforms } = useApi("/platforms");
   const { data: trends } = useApi("/trends");
+  const { data: ml } = useApi("/ml");
 
   return (
     <div className="page">
@@ -529,6 +677,7 @@ export default function App() {
         <TrendsCard data={trends} />
         <DriverSupplyCard data={trends} />
       </div>
+      <MLExplainCard data={ml} />
       <MethodologyCard data={summary} />
     </div>
   );

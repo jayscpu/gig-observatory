@@ -536,6 +536,132 @@ body{
 .tooltipKey{ flex: 1; }
 .tooltipVal{ color: var(--text); font-weight: 900; }
 
+/* ML Card */
+.mlPerfBadge{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(47,109,85,0.12);
+  border: 1px solid var(--stroke);
+  color: var(--green);
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.mlGrid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.mlSection{
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid var(--stroke);
+}
+
+.mlSectionTitle{
+  font-weight: 800;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.mlBarList{ display:flex; flex-direction:column; gap: 8px; }
+.mlBarRow{
+  display:grid;
+  grid-template-columns: 140px 1fr 45px;
+  gap: 8px;
+  align-items:center;
+}
+.mlBarLabel{ font-weight: 700; font-size: 12px; }
+.mlBarTrack{
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(27,43,34,0.06);
+  border: 1px solid var(--stroke);
+  overflow:hidden;
+}
+.mlBarFill{
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(47,109,85,0.45), rgba(47,109,85,0.75));
+}
+.mlBarVal{ text-align:right; font-weight: 800; font-size: 12px; color: var(--muted); }
+
+/* SHAP Waterfall */
+.shapWaterfall{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.shapBase, .shapResult{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(47,109,85,0.08);
+  border: 1px solid rgba(47,109,85,0.12);
+  font-weight: 700;
+  font-size: 12px;
+}
+.shapBaseVal, .shapResultVal{
+  font-weight: 900;
+  font-size: 14px;
+  color: var(--green);
+}
+.shapRow{
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.shapRow-positive{ background: rgba(47,109,85,0.06); }
+.shapRow-negative{ background: rgba(196,120,40,0.06); }
+.shapLabel{ font-weight: 700; }
+.shapArrow{
+  font-weight: 900;
+  font-size: 12px;
+}
+.shapRow-positive .shapArrow{ color: var(--green); }
+.shapRow-negative .shapArrow{ color: var(--warn); }
+.shapFeatureVal{ font-size: 11px; }
+
+/* ML Accuracy */
+.mlAccuracy{
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid var(--stroke);
+}
+
+.mlPerfRow{
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.mlPerfItem{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.65);
+  border: 1px solid var(--stroke);
+  font-weight: 700;
+  font-size: 12px;
+  flex: 1;
+}
+
 /* Responsive */
 @media (max-width: 1180px){
   .kpiGrid{ grid-template-columns: 1fr 1fr; }
@@ -543,5 +669,6 @@ body{
   .grid3{ grid-template-columns: 1fr; }
   .methodGrid{ grid-template-columns: 1fr; }
   .triangulationGrid{ flex-direction: column; }
+  .mlGrid{ grid-template-columns: 1fr; }
   .page{ width: calc(100% - 28px); }
 }

@@ -8,6 +8,7 @@ Endpoints:
   /api/triangulation    → Validation matrix showing method cross-checks
   /api/trends           → Google Trends data (consumer + driver supply)
   /api/appstore         → App store metrics for all platforms
+  /api/ml               → XGBoost model: feature importance + SHAP explanation
 """
 
 from fastapi import FastAPI
@@ -19,6 +20,7 @@ from backend.models.estimators import (
     get_validation_matrix,
 )
 from backend.models.forecast import get_full_projection
+from backend.models.ml_model import train_and_explain
 from backend.scrapers.app_store import get_fallback_app_data, scrape_all_platforms
 from backend.scrapers.google_trends import REAL_TRENDS_DATA, fetch_trends_data
 
@@ -86,3 +88,9 @@ async def appstore():
         return data
     except Exception:
         return get_fallback_app_data()
+
+
+@app.get("/api/ml")
+async def ml_model():
+    """XGBoost model: feature importance, SHAP values, prediction accuracy."""
+    return train_and_explain()
