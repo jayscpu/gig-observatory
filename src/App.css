@@ -634,6 +634,35 @@ body{
 .shapRow-negative .shapArrow{ color: var(--warn); }
 .shapFeatureVal{ font-size: 11px; }
 
+/* ML Forecast Banner */
+.mlForecastBanner{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: rgba(47,109,85,0.08);
+  border: 1px solid rgba(47,109,85,0.15);
+  margin-bottom: 14px;
+}
+.mlForecastFrom, .mlForecastTo{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-weight: 700;
+  font-size: 13px;
+}
+.mlForecastArrow{
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--green);
+}
+.mlForecastValue{
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--green);
+}
+
 /* ML Accuracy */
 .mlAccuracy{
   margin-top: 14px;

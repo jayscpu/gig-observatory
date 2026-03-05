@@ -514,28 +514,28 @@ function MethodologyCard({ data }) {
 function MLExplainCard({ data }) {
   if (!data)
     return (
-      <Card title="ML Model: Proxy Signal Analysis" className="bigCard">
+      <Card title="Next-Quarter Workforce Forecast" className="bigCard">
         <LoadingState />
       </Card>
     );
   if (data.error)
     return (
-      <Card title="ML Model" className="bigCard">
+      <Card title="ML Forecast" className="bigCard">
         <div className="muted">{data.error}</div>
       </Card>
     );
 
   const perf = data.performance || {};
   const features = data.feature_importance || [];
-  const explanation = data.latest_quarter_explanation || {};
-  const breakdown = explanation.shap_breakdown || [];
-  const predsActual = data.predictions_vs_actual || [];
+  const forecast = data.next_quarter_forecast || {};
+  const breakdown = forecast.shap_breakdown || [];
+  const validation = data.validation_results || [];
 
   return (
     <Card
       title={
         <span>
-          ML Model: Proxy Signal Analysis{" "}
+          Next-Quarter Workforce Forecast{" "}
           <span className="muted">(XGBoost + SHAP)</span>
         </span>
       }
@@ -543,15 +543,31 @@ function MLExplainCard({ data }) {
       right={
         <span className="mlPerfBadge">
           <Activity size={14} />
-          R² {perf.r2_score} · MAPE {perf.mape_pct}%
+          MAPE {perf.mape_pct}%
         </span>
       }
       className="bigCard"
     >
+      {/* Forecast headline */}
+      <div className="mlForecastBanner">
+        <div className="mlForecastFrom">
+          <span className="muted">Based on</span>
+          <span>{forecast.input_quarter?.replace("_", " ")}</span>
+        </div>
+        <div className="mlForecastArrow">→</div>
+        <div className="mlForecastTo">
+          <span className="muted">Forecast for</span>
+          <span className="mlForecastValue">
+            {forecast.forecast_quarter?.replace("_", " ")}:{" "}
+            {forecast.predicted_workers?.toLocaleString()} workers
+          </span>
+        </div>
+      </div>
+
       <div className="mlGrid">
         {/* Feature Importance */}
         <div className="mlSection">
-          <div className="mlSectionTitle">Feature Importance (SHAP)</div>
+          <div className="mlSectionTitle">Which signals best predict next quarter? (SHAP)</div>
           <div className="mlBarList">
             {features.map((f) => (
               <div className="mlBarRow" key={f.feature}>
@@ -568,16 +584,16 @@ function MLExplainCard({ data }) {
           </div>
         </div>
 
-        {/* Latest Quarter Explanation */}
+        {/* Forecast SHAP Breakdown */}
         <div className="mlSection">
           <div className="mlSectionTitle">
-            Latest Quarter Breakdown ({explanation.quarter?.replace("_", " ")})
+            Why {forecast.forecast_quarter?.replace("_", " ")}?
           </div>
           <div className="shapWaterfall">
             <div className="shapBase">
-              <span className="muted">Base value</span>
+              <span className="muted">Avg workforce (base)</span>
               <span className="shapBaseVal">
-                {explanation.base_value?.toLocaleString()}
+                {forecast.base_value?.toLocaleString()}
               </span>
             </div>
             {breakdown.map((b) => (
@@ -594,25 +610,25 @@ function MLExplainCard({ data }) {
               </div>
             ))}
             <div className="shapResult">
-              <span className="muted">Predicted</span>
+              <span className="muted">Forecast</span>
               <span className="shapResultVal">
-                {explanation.predicted?.toLocaleString()}
+                {forecast.predicted_workers?.toLocaleString()}
               </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Predictions vs Actual mini chart */}
+      {/* Expanding window validation chart */}
       <div className="mlAccuracy">
-        <div className="mlSectionTitle">Model Accuracy (LOO Cross-Validation)</div>
+        <div className="mlSectionTitle">Backtest: How well did it predict past quarters?</div>
         <div className="miniChart">
           <ResponsiveContainer width="100%" height={180}>
             <ComposedChart
-              data={predsActual.map((d) => ({
+              data={validation.map((d) => ({
                 q: d.quarter.replace("_", " "),
                 actual: d.actual,
-                predicted: d.loo_predicted,
+                predicted: d.predicted,
               }))}
               margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
             >
@@ -629,7 +645,7 @@ function MLExplainCard({ data }) {
               <Line
                 type="monotone"
                 dataKey="predicted"
-                name="LOO Predicted"
+                name="Predicted (1Q ahead)"
                 stroke="rgba(196,156,84,0.9)"
                 strokeWidth={2.5}
                 dot={{ fill: "rgba(196,156,84,0.9)", r: 3 }}
@@ -647,8 +663,8 @@ function MLExplainCard({ data }) {
             <span>±{perf.mae?.toLocaleString()} workers</span>
           </div>
           <div className="mlPerfItem">
-            <span className="muted">Samples</span>
-            <span>{data.n_samples} quarters</span>
+            <span className="muted">Training</span>
+            <span>{data.n_samples} quarter pairs</span>
           </div>
         </div>
       </div>

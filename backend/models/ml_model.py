@@ -1,36 +1,34 @@
 """
-XGBoost proxy-to-workforce calibration model with SHAP explainability.
+XGBoost one-quarter-ahead workforce forecasting with SHAP explainability.
 
 Purpose:
-  Given INDEPENDENT proxy signals (not the ones used in the estimation
-  formula), train a model that predicts workforce size. This validates
-  whether non-traditional data sources genuinely correlate with
-  platform-based employment.
+  Given THIS quarter's proxy signals, predict NEXT quarter's workforce size.
+  This is genuinely predictive — the model learns temporal dynamics that
+  the estimation formula cannot capture (it only computes current quarter).
 
-  Key design choice: features are PROXY signals only — not the inputs
-  to the estimation formula. This way SHAP shows which external data
-  sources are actually predictive, rather than reflecting our own math.
+  SHAP reveals which current-quarter signals best forecast future workforce
+  changes — actionable intelligence for policymakers.
 
-Features (all independent proxies):
-  - Gross margin trend (financial health → hiring capacity)
-  - Take rate (platform maturity signal)
-  - Revenue growth rate (expansion signal)
-  - Order volume (demand signal)
+Features (current quarter t):
+  - Gross margin trend (financial health → future hiring capacity)
+  - Take rate (platform maturity → future workforce needs)
+  - Revenue growth rate (expansion signal → future demand)
+  - Order volume (current demand → future driver needs)
+  - Revenue per order (unit economics → sustainability)
+  - Cost efficiency (operational health → growth capacity)
   - Quarter index (seasonality / time trend)
 
 Target:
-  - Triangulated worker estimate (from estimators.py)
+  - Workforce estimate at quarter t+1 (one step ahead)
 """
 
 import numpy as np
 from xgboost import XGBRegressor
-from sklearn.model_selection import LeaveOneOut
 from sklearn.metrics import mean_absolute_error, r2_score
 
 from backend.config import JAHEZ_FINANCIALS
 from backend.models.estimators import get_time_series
 
-# Human-readable feature labels for the dashboard
 FEATURE_LABELS = {
     "gross_margin_pct": "Gross Margin %",
     "take_rate_pct": "Take Rate %",
@@ -42,22 +40,22 @@ FEATURE_LABELS = {
 }
 
 
-def _build_feature_matrix() -> tuple[np.ndarray, np.ndarray, list[str], list[str]]:
+def _build_feature_matrix():
     """
-    Build feature matrix from quarterly data.
-    Features are proxy signals NOT used directly in the estimation formula.
+    Build one-step-ahead feature matrix.
+    X[i] = features from quarter t, y[i] = workforce at quarter t+1.
     """
     series = get_time_series()
     if not series:
-        return np.array([]), np.array([]), [], []
+        return np.array([]), np.array([]), [], [], []
 
     feature_names = list(FEATURE_LABELS.keys())
-
-    X_rows = []
-    y_rows = []
-    quarters = []
-
     sorted_quarters = sorted(JAHEZ_FINANCIALS.keys())
+
+    # First, compute features for ALL quarters
+    all_features = []
+    all_targets = []
+    all_quarters = []
 
     for i, q in enumerate(sorted_quarters):
         fin = JAHEZ_FINANCIALS[q]
@@ -81,67 +79,102 @@ def _build_feature_matrix() -> tuple[np.ndarray, np.ndarray, list[str], list[str
         if not match:
             continue
 
-        target = match[0]["estimated"]
-
-        X_rows.append([
-            gross_margin,
-            take_rate,
-            rev_growth,
-            orders,
-            rev_per_order,
-            cost_efficiency,
-            float(i),
+        all_features.append([
+            gross_margin, take_rate, rev_growth, orders,
+            rev_per_order, cost_efficiency, float(i),
         ])
-        y_rows.append(target)
-        quarters.append(q)
+        all_targets.append(match[0]["estimated"])
+        all_quarters.append(q)
 
-    return np.array(X_rows), np.array(y_rows), feature_names, quarters
+    # One-step-ahead: X[t] → y[t+1]
+    X_rows = []
+    y_rows = []
+    input_quarters = []  # quarter of features (t)
+    target_quarters = []  # quarter of target (t+1)
+
+    for i in range(len(all_features) - 1):
+        X_rows.append(all_features[i])
+        y_rows.append(all_targets[i + 1])
+        input_quarters.append(all_quarters[i])
+        target_quarters.append(all_quarters[i + 1])
+
+    # The latest quarter features are for the NEXT prediction (unseen future)
+    latest_features = np.array([all_features[-1]])
+    latest_quarter = all_quarters[-1]
+
+    return (
+        np.array(X_rows), np.array(y_rows),
+        feature_names, input_quarters, target_quarters,
+        latest_features, latest_quarter,
+    )
 
 
 def train_and_explain() -> dict:
     """
-    Train XGBoost and compute SHAP values.
-    Returns feature importance, per-quarter explanations, and model accuracy.
+    Train one-step-ahead XGBoost forecaster and compute SHAP values.
+    Uses expanding window validation (train on 1..t, test on t+1).
     """
-    X, y, feature_names, quarters = _build_feature_matrix()
+    result = _build_feature_matrix()
+    if len(result[0]) == 0:
+        return {"error": "Not enough data"}
+
+    X, y, feature_names, input_quarters, target_quarters, latest_X, latest_q = result
 
     if len(X) < 4:
         return {"error": "Not enough data points to train model"}
 
-    # Train on all data for SHAP
-    model = XGBRegressor(
-        n_estimators=100,
-        max_depth=3,
-        learning_rate=0.15,
-        reg_alpha=1.0,
-        reg_lambda=3.0,
-        subsample=0.8,
-        random_state=42,
-    )
-    model.fit(X, y)
+    # Expanding window cross-validation (more realistic than LOO for time series)
+    min_train = 3
+    ew_predictions = []
+    ew_actuals = []
+    ew_quarters = []
 
-    # Leave-one-out cross-validation
-    loo = LeaveOneOut()
-    loo_predictions = np.zeros(len(y))
-    for train_idx, test_idx in loo.split(X):
+    for t in range(min_train, len(X)):
+        X_train, y_train = X[:t], y[:t]
+        X_test = X[t:t + 1]
+
         m = XGBRegressor(
             n_estimators=100, max_depth=3, learning_rate=0.15,
             reg_alpha=1.0, reg_lambda=3.0, subsample=0.8, random_state=42,
         )
-        m.fit(X[train_idx], y[train_idx])
-        loo_predictions[test_idx] = m.predict(X[test_idx])
+        m.fit(X_train, y_train)
+        pred = m.predict(X_test)[0]
+        ew_predictions.append(pred)
+        ew_actuals.append(y[t])
+        ew_quarters.append(target_quarters[t])
 
-    mae = mean_absolute_error(y, loo_predictions)
-    r2 = r2_score(y, loo_predictions)
-    mape = np.mean(np.abs((y - loo_predictions) / y)) * 100
+    ew_predictions = np.array(ew_predictions)
+    ew_actuals = np.array(ew_actuals)
+
+    mae = mean_absolute_error(ew_actuals, ew_predictions)
+    r2 = r2_score(ew_actuals, ew_predictions)
+    mape = np.mean(np.abs((ew_actuals - ew_predictions) / ew_actuals)) * 100
+
+    # Train final model on ALL data for SHAP + next-quarter forecast
+    model = XGBRegressor(
+        n_estimators=100, max_depth=3, learning_rate=0.15,
+        reg_alpha=1.0, reg_lambda=3.0, subsample=0.8, random_state=42,
+    )
+    model.fit(X, y)
+
+    # Forecast next quarter (unseen)
+    next_quarter_pred = int(model.predict(latest_X)[0])
+
+    # Derive next quarter label
+    year, qnum = latest_q.split("_Q")
+    next_qnum = int(qnum) + 1
+    if next_qnum > 4:
+        next_quarter_label = f"{int(year) + 1}_Q1"
+    else:
+        next_quarter_label = f"{year}_Q{next_qnum}"
 
     # SHAP
     try:
         import shap
         explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X)
+        shap_values_all = explainer.shap_values(X)
 
-        mean_shap = np.abs(shap_values).mean(axis=0)
+        mean_shap = np.abs(shap_values_all).mean(axis=0)
         total_shap = mean_shap.sum()
         shap_pct = (mean_shap / total_shap * 100) if total_shap > 0 else mean_shap
 
@@ -155,21 +188,21 @@ def train_and_explain() -> dict:
             })
         feature_importance.sort(key=lambda x: x["importance_pct"], reverse=True)
 
-        # Per-quarter SHAP for latest quarter
-        latest_shap = shap_values[-1]
+        # SHAP breakdown for the next-quarter forecast
+        latest_shap = explainer.shap_values(latest_X)[0]
         base_value = float(explainer.expected_value)
-        latest_breakdown = []
+        forecast_breakdown = []
         for i, name in enumerate(feature_names):
-            latest_breakdown.append({
+            forecast_breakdown.append({
                 "feature": name,
                 "label": FEATURE_LABELS.get(name, name),
                 "shap_value": round(float(latest_shap[i]), 0),
-                "feature_value": round(float(X[-1][i]), 2),
+                "feature_value": round(float(latest_X[0][i]), 2),
                 "direction": "positive" if latest_shap[i] > 0 else "negative",
             })
-        latest_breakdown.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
+        forecast_breakdown.sort(key=lambda x: abs(x["shap_value"]), reverse=True)
 
-    except Exception as e:
+    except Exception:
         raw_importance = model.feature_importances_
         total = raw_importance.sum()
         feature_importance = []
@@ -181,38 +214,37 @@ def train_and_explain() -> dict:
                 "mean_shap": 0,
             })
         feature_importance.sort(key=lambda x: x["importance_pct"], reverse=True)
-        latest_breakdown = []
+        forecast_breakdown = []
         base_value = float(y.mean())
 
-    # Predictions vs actuals
-    predictions = model.predict(X)
-    pred_vs_actual = []
-    for i, q in enumerate(quarters):
-        pred_vs_actual.append({
+    # Expanding window results for chart
+    validation_results = []
+    for i, q in enumerate(ew_quarters):
+        validation_results.append({
             "quarter": q,
-            "actual": int(y[i]),
-            "predicted": int(predictions[i]),
-            "loo_predicted": int(loo_predictions[i]),
-            "error_pct": round(abs(y[i] - loo_predictions[i]) / y[i] * 100, 1),
+            "actual": int(ew_actuals[i]),
+            "predicted": int(ew_predictions[i]),
+            "error_pct": round(abs(ew_actuals[i] - ew_predictions[i]) / ew_actuals[i] * 100, 1),
         })
 
     return {
-        "model": "XGBoost Regressor",
+        "model": "XGBoost One-Step-Ahead Forecaster",
+        "description": "Predicts next quarter's workforce from current quarter's proxy signals",
         "n_samples": len(X),
         "n_features": len(feature_names),
         "performance": {
             "r2_score": round(float(r2), 3),
             "mae": round(float(mae)),
             "mape_pct": round(float(mape), 1),
-            "validation": "Leave-One-Out Cross-Validation",
+            "validation": "Expanding Window (time-series aware)",
         },
         "feature_importance": feature_importance,
-        "latest_quarter_explanation": {
-            "quarter": quarters[-1],
-            "predicted": int(predictions[-1]),
-            "actual": int(y[-1]),
+        "next_quarter_forecast": {
+            "input_quarter": latest_q,
+            "forecast_quarter": next_quarter_label,
+            "predicted_workers": next_quarter_pred,
             "base_value": round(base_value),
-            "shap_breakdown": latest_breakdown,
+            "shap_breakdown": forecast_breakdown,
         },
-        "predictions_vs_actual": pred_vs_actual,
+        "validation_results": validation_results,
     }
